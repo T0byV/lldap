@@ -210,7 +210,13 @@ fn root_dse_response(base_dn: &str) -> LdapOp {
                 atype: "isGlobalCatalogReady".to_string(),
                 vals: vec![b"false".to_vec()],
             },
+            LdapPartialAttribute {
+                atype: "subschemaSubentry".to_string(),
+                vals: vec![b"cn=Subschema".to_vec()],
+            },
         ],
+    })
+}
     })
 }
 
