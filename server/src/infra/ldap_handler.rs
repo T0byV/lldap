@@ -8,7 +8,7 @@ use crate::{
             utils::{
                 get_user_id_from_distinguished_name, is_subtree, parse_distinguished_name, LdapInfo,
             },
-        },
+        }, 
         opaque_handler::OpaqueHandler,
         schema::PublicSchema,
     },
@@ -25,15 +25,18 @@ use ldap3_proto::proto::{
     LdapResult as LdapResultOp, LdapResultCode, LdapSearchRequest, LdapSearchResultEntry,
     LdapSearchScope, OID_PASSWORD_MODIFY, OID_WHOAMI,
 };
+use domain::types::{AttributeName, AttributeType, Email, Group, JpegPhoto, LdapObjectClass, UserAndGroups, UserId};
 use lldap_domain::{
     requests::CreateUserRequest,
     types::{Attribute, AttributeName, AttributeType, Email, Group, UserAndGroups, UserId},
 };
 use lldap_domain_handlers::handler::{
-    BackendHandler, BindRequest, LoginHandler, ReadSchemaBackendHandler,
+    BackendHandler, BindRequest, LoginHandler, ReadSchemaBackendHandler, AttributeList, AttributeSchema, CreateUserRequest, Schema
 };
 use std::collections::HashMap;
 use tracing::{debug, instrument, warn};
+use itertools::Itertools;
+use chrono::Utc;
 
 #[derive(Debug)]
 enum SearchScope {
