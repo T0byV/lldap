@@ -3,7 +3,13 @@ use std::sync::Arc;
 use crate::{
     domain::{
         deserialize::deserialize_attribute_value,
-        ldap::utils::{map_user_field, UserFieldType},
+        handler::{BackendHandler, ReadSchemaBackendHandler},
+        ldap::{
+            utils::{map_user_field, UserFieldType},
+            user::DEFAULT_USER_OBJECT_CLASSES,
+            group::DEFAULT_GROUP_OBJECT_CLASSES,
+        },
+        model::UserColumn,
         schema::PublicSchema,
     },
     infra::{
@@ -523,6 +529,7 @@ impl<Handler: BackendHandler> From<DomainAttributeSchema> for AttributeSchema<Ha
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct AttributeList<Handler: BackendHandler> {
     attributes: DomainAttributeList,
+    default_classes: Vec<LdapObjectClass>,
     extra_classes: Vec<LdapObjectClass>,
     _phantom: std::marker::PhantomData<Box<Handler>>,
 }
@@ -560,24 +567,13 @@ impl<Handler: BackendHandler> AttributeList<Handler> {
     }
 
     fn object_classes(&self) -> Vec<ObjectClassGQL> {
-        let mut all_object_classes: Vec<ObjectClassGQL> = vec![
-            ObjectClassGQL {
-                object_class: "inetOrgPerson".to_string(),
+        let mut all_object_classes: Vec<ObjectClassGQL> = self.default_classes
+            .iter()
+            .map(|c| ObjectClassGQL {
+                object_class: c.to_string(),
                 is_hardcoded: true,
-            },
-            ObjectClassGQL {
-                object_class: "posixAccount".to_string(),
-                is_hardcoded: true,
-            },
-            ObjectClassGQL {
-                object_class: "mailAccount".to_string(),
-                is_hardcoded: true,
-            },
-            ObjectClassGQL {
-                object_class: "person".to_string(),
-                is_hardcoded: true,
-            },
-        ];
+            })
+            .collect();
 
         all_object_classes.extend(
             self.extra_classes.iter().map(|c| ObjectClassGQL {
@@ -591,9 +587,10 @@ impl<Handler: BackendHandler> AttributeList<Handler> {
 }
 
 impl<Handler: BackendHandler> AttributeList<Handler> {
-    fn new(attributes: DomainAttributeList, extra_classes: Vec<LdapObjectClass>) -> Self {
+    fn new(attributes: DomainAttributeList, default_classes: Vec<LdapObjectClass>, extra_classes: Vec<LdapObjectClass>) -> Self {
         Self {
             attributes,
+            default_classes,
             extra_classes,
             _phantom: std::marker::PhantomData,
         }
@@ -611,12 +608,14 @@ impl<Handler: BackendHandler> Schema<Handler> {
     fn user_schema(&self) -> AttributeList<Handler> {
         AttributeList::<Handler>::new(
             self.schema.get_schema().user_attributes.clone(),
+            DEFAULT_USER_OBJECT_CLASSES.iter().map(|&c| LdapObjectClass::from(c)).collect(),
             self.schema.get_schema().extra_user_object_classes.clone(),
         )
     }
     fn group_schema(&self) -> AttributeList<Handler> {
         AttributeList::<Handler>::new(
             self.schema.get_schema().group_attributes.clone(),
+            DEFAULT_GROUP_OBJECT_CLASSES.iter().map(|&c| LdapObjectClass::from(c)).collect(),
             self.schema.get_schema().extra_group_object_classes.clone(),
         )
     }
