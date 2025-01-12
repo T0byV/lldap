@@ -186,7 +186,6 @@ enum AttributeType {
 type AttributeList {
   attributes: [AttributeSchema!]!
   extraObjectClasses: [String!]!
-  hardcodedObjectClasses: [String!]!
   objectClasses: [ObjectClassGQL!]!
 }
 
