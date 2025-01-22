@@ -22,8 +22,7 @@ use lldap_domain::types::{
 };
 use lldap_domain_handlers::handler::{GroupListerBackendHandler, GroupRequestFilter};
 
-pub const DEFAULT_GROUP_OBJECT_CLASSES: &[&str] =
-    &["groupOfUniqueNames"];
+pub const DEFAULT_GROUP_OBJECT_CLASSES: &[&str] = &["groupOfUniqueNames"];
 
 pub fn get_group_attribute(
     group: &Group,
