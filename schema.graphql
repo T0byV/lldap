@@ -185,8 +185,8 @@ enum AttributeType {
 
 type AttributeList {
   attributes: [AttributeSchema!]!
-  extraObjectClasses: [String!]!
-  objectClasses: [ObjectClassGQL!]!
+  extraLdapObjectClasses: [String!]!
+  ldapObjectClasses: [ObjectClassGQL!]!
 }
 
 type Success {
