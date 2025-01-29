@@ -535,13 +535,13 @@ pub struct AttributeList<Handler: BackendHandler> {
 }
 
 #[derive(Clone)]
-pub struct ObjectClassGQL {
+pub struct ObjectClassInfo {
     object_class: String,
     is_hardcoded: bool,
 }
 
 #[graphql_object]
-impl ObjectClassGQL {
+impl ObjectClassInfo {
     fn object_class(&self) -> &str {
         &self.object_class
     }
@@ -566,11 +566,11 @@ impl<Handler: BackendHandler> AttributeList<Handler> {
         self.extra_classes.iter().map(|c| c.to_string()).collect()
     }
 
-    fn ldap_object_classes(&self) -> Vec<ObjectClassGQL> {
-        let mut all_object_classes: Vec<ObjectClassGQL> = self
+    fn ldap_object_classes(&self) -> Vec<ObjectClassInfo> {
+        let mut all_object_classes: Vec<ObjectClassInfo> = self
             .default_classes
             .iter()
-            .map(|c| ObjectClassGQL {
+            .map(|c| ObjectClassInfo {
                 object_class: c.to_string(),
                 is_hardcoded: true,
             })
@@ -579,7 +579,7 @@ impl<Handler: BackendHandler> AttributeList<Handler> {
         all_object_classes.extend(
             self.extra_classes
                 .iter()
-                .map(|c| ObjectClassGQL {
+                .map(|c| ObjectClassInfo {
                     object_class: c.to_string(),
                     is_hardcoded: false,
                 })
