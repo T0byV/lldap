@@ -583,7 +583,6 @@ impl<Handler: BackendHandler> AttributeList<Handler> {
                     object_class: c.to_string(),
                     is_hardcoded: false,
                 })
-                .collect::<Vec<_>>(),
         );
 
         all_object_classes
