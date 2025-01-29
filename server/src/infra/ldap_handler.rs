@@ -897,7 +897,7 @@ impl<Backend: BackendHandler + LoginHandler + OpaqueHandler> LdapHandler<Backend
                 }
             }
         } else if request.base == "cn=Subschema" && request.scope == LdapSearchScope::Base {
-            debug!("Subschema request made");
+            debug!("Schema request made");
             let backend_handler = self
                 .user_info
                 .as_ref()
