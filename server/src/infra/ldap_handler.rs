@@ -228,6 +228,7 @@ fn root_dse_response(base_dn: &str) -> LdapOp {
 
 pub struct ObjectClassList(Vec<LdapObjectClass>);
 
+// See RFC4512 section 4.2.1 "objectClasses"
 impl ObjectClassList {
     fn format_for_ldap_schema_description(&self) -> String {
         self.0
@@ -239,6 +240,9 @@ impl ObjectClassList {
     }
 }
 
+// See RFC4512 section 4.2 "Subschema Subentries"
+// This struct holds all information on what attributes and objectclasses are present on the server.
+// It can be used to 'index' a server using a LDAP subschema call.
 pub struct LdapSchemaDescription {
     user_attributes_must: AttributeList,
     user_attributes_may: AttributeList,
@@ -266,6 +270,7 @@ impl LdapSchemaDescription {
         self
     }
 
+    // See RFC4512 section 4.2.2 "attributeTypes"
     fn formatted_attribute_list(&self) -> Vec<Vec<u8>> {
         let mut formatted_list: Vec<Vec<u8>> = Vec::new();
 
@@ -897,6 +902,7 @@ impl<Backend: BackendHandler + LoginHandler + OpaqueHandler> LdapHandler<Backend
                 }
             }
         } else if request.base == "cn=Subschema" && request.scope == LdapSearchScope::Base {
+            // See RFC4512 section 4.4 "Subschema discovery"
             debug!("Schema request made");
             let backend_handler = self
                 .user_info
