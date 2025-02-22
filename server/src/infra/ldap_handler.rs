@@ -19,9 +19,6 @@ use crate::{
 };
 use anyhow::Result;
 use chrono::Utc;
-use domain::types::{
-    AttributeName, AttributeType, Email, Group, JpegPhoto, LdapObjectClass, UserAndGroups, UserId,
-};
 use itertools::Itertools;
 use ldap3_proto::proto::{
     LdapAddRequest, LdapBindCred, LdapBindRequest, LdapBindResponse, LdapCompareRequest,
@@ -31,12 +28,12 @@ use ldap3_proto::proto::{
     LdapSearchScope, OID_PASSWORD_MODIFY, OID_WHOAMI,
 };
 use lldap_domain::{
+    schema::{Schema, AttributeSchema, AttributeList},
     requests::CreateUserRequest,
-    types::{Attribute, AttributeName, AttributeType, Email, Group, UserAndGroups, UserId},
+    types::{Attribute, AttributeName, AttributeType, Email, Group, LdapObjectClass, UserAndGroups, UserId},
 };
 use lldap_domain_handlers::handler::{
-    AttributeList, AttributeSchema, BackendHandler, BindRequest, CreateUserRequest, LoginHandler,
-    ReadSchemaBackendHandler, Schema,
+    BackendHandler, BindRequest, LoginHandler, ReadSchemaBackendHandler,
 };
 
 use std::collections::HashMap;

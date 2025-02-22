@@ -3,13 +3,11 @@ use std::sync::Arc;
 use crate::{
     domain::{
         deserialize::deserialize_attribute_value,
-        handler::{BackendHandler, ReadSchemaBackendHandler},
         ldap::{
             group::get_default_group_object_classes,
             user::get_default_user_object_classes,
             utils::{map_user_field, UserFieldType},
         },
-        model::UserColumn,
         schema::PublicSchema,
     },
     infra::{
