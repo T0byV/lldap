@@ -576,14 +576,10 @@ impl<Handler: BackendHandler> AttributeList<Handler> {
             })
             .collect();
 
-        all_object_classes.extend(
-            self.extra_classes
-                .iter()
-                .map(|c| ObjectClassInfo {
-                    object_class: c.to_string(),
-                    is_hardcoded: false,
-                })
-        );
+        all_object_classes.extend(self.extra_classes.iter().map(|c| ObjectClassInfo {
+            object_class: c.to_string(),
+            is_hardcoded: false,
+        }));
 
         all_object_classes
     }

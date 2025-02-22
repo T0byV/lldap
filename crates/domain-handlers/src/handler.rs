@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use itertools::Itertools;
 use ldap3_proto::proto::LdapSubstringFilter;
 use lldap_domain::{
     requests::{
@@ -12,8 +13,6 @@ use lldap_domain::{
     },
 };
 use lldap_domain_model::{error::Result, model::UserColumn};
-use async_trait::async_trait;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 

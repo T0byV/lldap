@@ -26,11 +26,10 @@ use lldap_domain_model::model::UserColumn;
 const DEFAULT_USER_OBJECT_CLASSES: &[&str] =
     &["inetOrgPerson", "posixAccount", "mailAccount", "person"];
 
-
 fn get_default_user_object_classes_vec_u8() -> Vec<Vec<u8>> {
     DEFAULT_USER_OBJECT_CLASSES
         .iter()
-        .map(|c| c.as_bytes().to_vec()) 
+        .map(|c| c.as_bytes().to_vec())
         .collect()
 }
 

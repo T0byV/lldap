@@ -27,7 +27,7 @@ const DEFAULT_GROUP_OBJECT_CLASSES: &[&str] = &["groupOfUniqueNames"];
 fn get_default_group_object_classes_vec_u8() -> Vec<Vec<u8>> {
     DEFAULT_GROUP_OBJECT_CLASSES
         .iter()
-        .map(|c| c.as_bytes().to_vec()) 
+        .map(|c| c.as_bytes().to_vec())
         .collect()
 }
 

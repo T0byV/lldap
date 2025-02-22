@@ -3,12 +3,8 @@ use crate::{
         deserialize,
         ldap::{
             error::{LdapError, LdapResult},
-            group::{
-                convert_groups_to_ldap_op, get_default_group_object_classes, get_groups_list,
-            },
-            user::{
-                convert_users_to_ldap_op, get_default_user_object_classes, get_user_list,
-            },
+            group::{convert_groups_to_ldap_op, get_default_group_object_classes, get_groups_list},
+            user::{convert_users_to_ldap_op, get_default_user_object_classes, get_user_list},
             utils::{
                 get_user_id_from_distinguished_name, is_subtree, parse_distinguished_name, LdapInfo,
             },
@@ -23,6 +19,9 @@ use crate::{
 };
 use anyhow::Result;
 use chrono::Utc;
+use domain::types::{
+    AttributeName, AttributeType, Email, Group, JpegPhoto, LdapObjectClass, UserAndGroups, UserId,
+};
 use itertools::Itertools;
 use ldap3_proto::proto::{
     LdapAddRequest, LdapBindCred, LdapBindRequest, LdapBindResponse, LdapCompareRequest,
@@ -31,13 +30,13 @@ use ldap3_proto::proto::{
     LdapResult as LdapResultOp, LdapResultCode, LdapSearchRequest, LdapSearchResultEntry,
     LdapSearchScope, OID_PASSWORD_MODIFY, OID_WHOAMI,
 };
-use domain::types::{AttributeName, AttributeType, Email, Group, JpegPhoto, LdapObjectClass, UserAndGroups, UserId};
 use lldap_domain::{
     requests::CreateUserRequest,
     types::{Attribute, AttributeName, AttributeType, Email, Group, UserAndGroups, UserId},
 };
 use lldap_domain_handlers::handler::{
-    BackendHandler, BindRequest, LoginHandler, ReadSchemaBackendHandler, AttributeList, AttributeSchema, CreateUserRequest, Schema
+    AttributeList, AttributeSchema, BackendHandler, BindRequest, CreateUserRequest, LoginHandler,
+    ReadSchemaBackendHandler, Schema,
 };
 
 use std::collections::HashMap;
@@ -465,12 +464,8 @@ fn get_lldap_builtin_schema() -> LdapSchemaDescription {
                 },
             ],
         },
-        user_object_classes: ObjectClassList(
-            get_default_user_object_classes()
-        ),
-        group_object_classes: ObjectClassList(
-            get_default_group_object_classes()
-        ),
+        user_object_classes: ObjectClassList(get_default_user_object_classes()),
+        group_object_classes: ObjectClassList(get_default_group_object_classes()),
     }
 }
 
@@ -913,7 +908,7 @@ impl<Backend: BackendHandler + LoginHandler + OpaqueHandler> LdapHandler<Backend
                     message: "No user currently bound".to_string(),
                 })?;
 
-                let schema = &backend_handler.get_schema().await.map_err(|e| LdapError {
+            let schema = &backend_handler.get_schema().await.map_err(|e| LdapError {
                 code: LdapResultCode::OperationsError,
                 message: format!("Unable to get schema: {:#}", e),
             })?;
@@ -3126,7 +3121,11 @@ mod tests {
     async fn test_subschema_response() {
         let mut ldap_handler = setup_bound_admin_handler(MockTestBackendHandler::new()).await;
 
-        let backend_handler = ldap_handler.user_info.as_ref().and_then(|u| ldap_handler.backend_handler.get_schema_only_handler(u)).unwrap();
+        let backend_handler = ldap_handler
+            .user_info
+            .as_ref()
+            .and_then(|u| ldap_handler.backend_handler.get_schema_only_handler(u))
+            .unwrap();
         let schema = &backend_handler.get_schema().await.unwrap();
 
         let request = LdapSearchRequest {
