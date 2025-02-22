@@ -22,7 +22,16 @@ use lldap_domain::types::{
 };
 use lldap_domain_handlers::handler::{GroupListerBackendHandler, GroupRequestFilter};
 
+const REQUIRED_GROUP_ATTRIBUTES: &[&str] = &["display_name"];
+
 const DEFAULT_GROUP_OBJECT_CLASSES: &[&str] = &["groupOfUniqueNames"];
+
+pub fn get_required_group_attributes() -> Vec<AttributeName> {
+    REQUIRED_GROUP_ATTRIBUTES
+        .iter()
+        .map(|a| AttributeName::from(a.to_string()))
+        .collect()
+}
 
 fn get_default_group_object_classes_vec_u8() -> Vec<Vec<u8>> {
     DEFAULT_GROUP_OBJECT_CLASSES

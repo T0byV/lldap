@@ -3,8 +3,14 @@ use crate::{
         deserialize,
         ldap::{
             error::{LdapError, LdapResult},
-            group::{convert_groups_to_ldap_op, get_default_group_object_classes, get_groups_list},
-            user::{convert_users_to_ldap_op, get_default_user_object_classes, get_user_list},
+            group::{
+                convert_groups_to_ldap_op, get_default_group_object_classes, get_groups_list,
+                get_required_group_attributes,
+            },
+            user::{
+                convert_users_to_ldap_op, get_default_user_object_classes,
+                get_required_user_attributes, get_user_list,
+            },
             utils::{
                 get_user_id_from_distinguished_name, is_subtree, parse_distinguished_name, LdapInfo,
             },
@@ -28,15 +34,18 @@ use ldap3_proto::proto::{
     LdapSearchScope, OID_PASSWORD_MODIFY, OID_WHOAMI,
 };
 use lldap_domain::{
-    schema::{Schema, AttributeSchema, AttributeList},
     requests::CreateUserRequest,
-    types::{Attribute, AttributeName, AttributeType, Email, Group, LdapObjectClass, UserAndGroups, UserId},
+    schema::{AttributeList, Schema},
+    types::{
+        Attribute, AttributeName, AttributeType, Email, Group, LdapObjectClass, UserAndGroups,
+        UserId,
+    },
 };
 use lldap_domain_handlers::handler::{
     BackendHandler, BindRequest, LoginHandler, ReadSchemaBackendHandler,
 };
 
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 use tracing::{debug, instrument, warn};
 
 #[derive(Debug)]
@@ -224,6 +233,12 @@ fn root_dse_response(base_dn: &str) -> LdapOp {
 
 pub struct ObjectClassList(Vec<LdapObjectClass>);
 
+impl From<Vec<LdapObjectClass>> for ObjectClassList {
+    fn from(object_class: Vec<LdapObjectClass>) -> Self {
+        ObjectClassList(object_class)
+    }
+}
+
 // See RFC4512 section 4.2.1 "objectClasses"
 impl ObjectClassList {
     fn format_for_ldap_schema_description(&self) -> String {
@@ -240,30 +255,79 @@ impl ObjectClassList {
 // This struct holds all information on what attributes and objectclasses are present on the server.
 // It can be used to 'index' a server using a LDAP subschema call.
 pub struct LdapSchemaDescription {
-    user_attributes_must: AttributeList,
-    user_attributes_may: AttributeList,
-    group_attributes_must: AttributeList,
-    group_attributes_may: AttributeList,
+    base: Schema,
     user_object_classes: ObjectClassList,
     group_object_classes: ObjectClassList,
 }
 
-impl LdapSchemaDescription {
-    fn extend_with_custom_schema(mut self, schema: &Schema) -> Self {
-        self.user_attributes_may
-            .attributes
-            .extend(schema.user_attributes.attributes.clone());
-        self.group_attributes_may
-            .attributes
-            .extend(schema.group_attributes.attributes.clone());
-        self.user_object_classes
-            .0
-            .extend(schema.extra_user_object_classes.clone());
-        self.group_object_classes
-            .0
-            .extend(schema.extra_group_object_classes.clone());
+impl Deref for LdapSchemaDescription {
+    type Target = Schema;
 
-        self
+    fn deref(&self) -> &Self::Target {
+        &self.base
+    }
+}
+
+impl LdapSchemaDescription {
+    fn from(schema: &Schema) -> Self {
+        let mut user_object_classes = get_default_user_object_classes();
+        user_object_classes.extend(schema.extra_user_object_classes.clone());
+        let mut group_object_classes = get_default_group_object_classes();
+        group_object_classes.extend(schema.extra_group_object_classes.clone());
+
+        Self {
+            base: PublicSchema::from(schema.clone()).get_schema().clone(),
+            user_object_classes: ObjectClassList(user_object_classes),
+            group_object_classes: ObjectClassList(group_object_classes),
+        }
+    }
+
+    fn required_user_attributes(&self) -> AttributeList {
+        let attributes = self
+            .user_attributes
+            .attributes
+            .iter()
+            .filter(|&a| get_required_user_attributes().contains(&a.name))
+            .cloned()
+            .collect();
+
+        AttributeList { attributes }
+    }
+
+    fn optional_user_attributes(&self) -> AttributeList {
+        let attributes = self
+            .user_attributes
+            .attributes
+            .iter()
+            .filter(|&a| !get_required_user_attributes().contains(&a.name))
+            .cloned()
+            .collect();
+
+        AttributeList { attributes }
+    }
+
+    fn required_group_attributes(&self) -> AttributeList {
+        let attributes = self
+            .group_attributes
+            .attributes
+            .iter()
+            .filter(|&a| get_required_group_attributes().contains(&a.name))
+            .cloned()
+            .collect();
+
+        AttributeList { attributes }
+    }
+
+    fn optional_group_attributes(&self) -> AttributeList {
+        let attributes = self
+            .group_attributes
+            .attributes
+            .iter()
+            .filter(|&a| !get_required_group_attributes().contains(&a.name))
+            .cloned()
+            .collect();
+
+        AttributeList { attributes }
     }
 
     // See RFC4512 section 4.2.2 "attributeTypes"
@@ -292,183 +356,16 @@ impl LdapSchemaDescription {
     }
 
     pub fn all_attributes(&self) -> AttributeList {
+        let mut combined_attributes = self.user_attributes.attributes.clone();
+        combined_attributes.extend(self.group_attributes.attributes.clone());
         AttributeList {
-            attributes: [
-                self.user_attributes_must.attributes.clone(),
-                self.user_attributes_may.attributes.clone(),
-                self.group_attributes_must.attributes.clone(),
-                self.group_attributes_may.attributes.clone(),
-            ]
-            .concat()
-            .iter()
-            .unique_by(|a| &a.name)
-            .cloned()
-            .collect::<Vec<_>>(),
+            attributes: combined_attributes,
         }
     }
 }
 
-fn get_lldap_builtin_schema() -> LdapSchemaDescription {
-    LdapSchemaDescription {
-        user_attributes_must: AttributeList {
-            attributes: vec![
-                AttributeSchema {
-                    name: "uid".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "mail".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-            ],
-        },
-        user_attributes_may: AttributeList {
-            attributes: vec![
-                AttributeSchema {
-                    name: "objectclass".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "givenname".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "sn".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "cn".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "jpegPhoto".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "createtimestamp".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "entryuuid".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-            ],
-        },
-        group_attributes_must: AttributeList {
-            attributes: vec![
-                AttributeSchema {
-                    name: "uid".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "cn".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-            ],
-        },
-        group_attributes_may: AttributeList {
-            attributes: vec![
-                AttributeSchema {
-                    name: "objectclass".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "member".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "uniquemember".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-                AttributeSchema {
-                    name: "entryuuid".into(),
-                    attribute_type: AttributeType::String,
-                    is_list: false,
-                    is_visible: true,
-                    is_editable: false,
-                    is_hardcoded: true,
-                    is_readonly: true,
-                },
-            ],
-        },
-        user_object_classes: ObjectClassList(get_default_user_object_classes()),
-        group_object_classes: ObjectClassList(get_default_group_object_classes()),
-    }
-}
-
 fn schema_response(schema: &Schema) -> LdapOp {
-    let full_schema: LdapSchemaDescription =
-        get_lldap_builtin_schema().extend_with_custom_schema(schema);
+    let ldap_schema_description: LdapSchemaDescription = LdapSchemaDescription::from(schema);
 
     let current_time_utc = Utc::now().format("%Y%m%d%H%M%SZ").to_string().into_bytes();
 
@@ -512,7 +409,7 @@ fn schema_response(schema: &Schema) -> LdapOp {
                 b"( 2.2 NAME 'JpegPhoto' SYNTAX 1.3.6.1.4.1.1466.115.121.1.28 )".to_vec(),
                 b"( 2.3 NAME 'DateTime' SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 )".to_vec(),
                 ].into_iter().chain(
-                    full_schema.formatted_attribute_list()
+                    ldap_schema_description.formatted_attribute_list()
                 ).collect()
            },
            LdapPartialAttribute {
@@ -520,15 +417,15 @@ fn schema_response(schema: &Schema) -> LdapOp {
             vals: vec![
                     format!(
                         "( 3.0 NAME ( {} ) DESC 'LLDAP builtin: a person' STRUCTURAL MUST ( {} ) MAY ( {} ) )",
-                        full_schema.user_object_classes.format_for_ldap_schema_description(),
-                        full_schema.user_attributes_must.format_for_ldap_schema_description(),
-                        full_schema.user_attributes_may.format_for_ldap_schema_description(),
+                        ldap_schema_description.user_object_classes.format_for_ldap_schema_description(),
+                        ldap_schema_description.required_user_attributes().format_for_ldap_schema_description(),
+                        ldap_schema_description.optional_user_attributes().format_for_ldap_schema_description(),
                     ).into_bytes(),
                     format!(
                         "( 3.1 NAME ( {} ) DESC 'LLDAP builtin: a group' STRUCTURAL MUST ( {} ) MAY ( {} ) )",
-                        full_schema.group_object_classes.format_for_ldap_schema_description(),
-                        full_schema.group_attributes_must.format_for_ldap_schema_description(),
-                        full_schema.group_attributes_may.format_for_ldap_schema_description(),
+                        ldap_schema_description.group_object_classes.format_for_ldap_schema_description(),
+                        ldap_schema_description.required_group_attributes().format_for_ldap_schema_description(),
+                        ldap_schema_description.optional_group_attributes().format_for_ldap_schema_description(),
                     ).into_bytes(),
                 ],
            },
